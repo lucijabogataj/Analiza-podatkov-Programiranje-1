@@ -9,7 +9,7 @@ Za vsak lokal bom zajela:
 * oceno
 * poštni naslov
 * višino doplačila
-* oddaljenost od centra Ljubljane
+* mesto
 * lastnosti ponudbe (vegetarijansko, dostop za invalide, dostava ...)
 
 Delovne hipoteze:
