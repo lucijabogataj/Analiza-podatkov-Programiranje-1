@@ -4,12 +4,14 @@ def vsebina_datoteke(directory, filename):
     with open(path, 'r') as file_in:
         return file_in.read()
 
+'''Prebere datoteko in vrne niz z vsebino.'''
 
 def page_to_blocks(page):
     '''Split "page" to a list of blocks.'''
     rx = re.compile(r'<div class="row restaurant(.*?)<div class="pull-right margin-right-10">', re.DOTALL)
     lokali = re.findall(rx, page)
     return lokali
+
 
 def get_information_from_block(block):
     '''Build a dictionary containing information.'''
@@ -19,22 +21,21 @@ def get_information_from_block(block):
                     r'data-doplacilo="(?P<doplacilo>)".*?
                     r'data-lokal="(?P<ime>)" .*?
                     r'data-city="(?P<mesto>)".*?
-                    r'checked="checked".*?value="(?P<ocena>)"'
+                    r'checked="checked".*?value="(?P<ocena>)".*?'
                     , re.DOTALL)
     data = re.search(rx, block)
     slovar_informacij = data.groupdict()
     return slovar_informacij
 
-def ads_from_file(filename, directory):
+def lokali_iz_datoteke(filename, directory):
     '''Parse the ads in filename/directory into a dictionary list.'''
-    page = read_file_to_string(filename, directory)
-    blocks = page_to_ads(page)
-    ads = [get_dict_from_ad_block(block) for block in blocks]
-    return ads
+    page = vsebina_datoteke(filename, directory)
+    blocks = page_to_blocks(page)
+    lokali = [get_information_from_block(block) for block in blocks]
+    return lokali
 
-
-def ads_frontpage():
-return ads_from_file(cat_directory, frontpage_filename)
+#def ads_frontpage():
+#return lokali_iz_datoteke(cat_directory, frontpage_filename)
 
 
 
