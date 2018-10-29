@@ -1,10 +1,12 @@
+import re
+import csv
+import os
+
 def vsebina_datoteke(directory, filename):
     '''Return the contents of the file "directory"/"filename" as a string.'''
     path = os.path.join(directory, filename)
     with open(path, 'r') as file_in:
         return file_in.read()
-
-'''Prebere datoteko in vrne niz z vsebino.'''
 
 def page_to_blocks(page):
     '''Split "page" to a list of blocks.'''
@@ -15,19 +17,19 @@ def page_to_blocks(page):
 
 def get_information_from_block(block):
     '''Build a dictionary containing information.'''
-    rx = re.compile(r'row (?P<lastnosti_ponudbe>)".*?data-lat=
-                    r'data-naslov="(?P<naslov>)".*?
-                    r'data-cena="(?P<cena>)".*?
-                    r'data-doplacilo="(?P<doplacilo>)".*?
-                    r'data-lokal="(?P<ime>)" .*?
-                    r'data-city="(?P<mesto>)".*?
+    rx = re.compile(r'row (?P<lastnosti_ponudbe>)".*?data-lat=.*?'
+                    r'data-naslov="(?P<naslov>)".*?'
+                    r'data-cena="(?P<cena>)".*?'
+                    r'data-doplacilo="(?P<doplacilo>)".*?'
+                    r'data-lokal="(?P<ime>)" .*?'
+                    r'data-city="(?P<mesto>)".*?'
                     r'checked="checked".*?value="(?P<ocena>)".*?'
                     , re.DOTALL)
     data = re.search(rx, block)
     slovar_informacij = data.groupdict()
     return slovar_informacij
 
-def lokali_iz_datoteke(filename, directory):
+def lokali_iz_datoteke(directory, filename):
     '''Parse the ads in filename/directory into a dictionary list.'''
     page = vsebina_datoteke(filename, directory)
     blocks = page_to_blocks(page)
@@ -38,6 +40,14 @@ def lokali_iz_datoteke(filename, directory):
 #return lokali_iz_datoteke(cat_directory, frontpage_filename)
 
 
+def zapisi_csv(slovarji, imena_polj, ime_datoteke):
+    '''Iz seznama slovarjev ustvari CSV datoteko z glavo.'''
+    pripravi_imenik(ime_datoteke)
+    with open(ime_datoteke, 'w', encoding='utf-8') as csv_datoteka:
+        writer = csv.DictWriter(csv_datoteka, fieldnames=imena_polj)
+        writer.writeheader()
+        for slovar in slovarji:
+            writer.writerow(slovar)
 
 def write_csv(fieldnames, rows, directory, filename):
     '''Write a CSV file to directory/filename. The fieldnames must be a list of
@@ -64,4 +74,8 @@ def write_cat_ads_to_csv(ads, directory, filename):
 
 def write_cat_csv(ads):
     '''Save "ads" to "cat_directory"/"csv_filename"'''
-write_cat_ads_to_csv(ads, cat_directory, csv_filename
+    write_cat_ads_to_csv(ads, cat_directory, csv_filename)
+
+
+lokali_iz_datoteke(r'U:\Programiranje 1\Analiza-podatkov-Programiranje-1', 'Imenik_lokalov_Studentska_prehrana.htm')
+
