@@ -2,51 +2,108 @@ import re
 import csv
 import os
 
+nahajalisce_strani = r'C:\Users\Lucija\Downloads'
+shranjena_stran = 'Imenik_lokalov_Studentska_prehrana.htm'
+vzorec_bloka = re.compile(
+    r'<div class="row restaurant(.*?)<div class="pull-right margin-right-10">', 
+    re.DOTALL)
+vzorec_podatkov = re.compile(r'row(?P<lastnosti_ponudbe>.+?)".*?data-lat=.*?'
+                    r'data-naslov="(?P<naslov>.+?)".*?'
+                    r'data-cena="(?P<cena>.+?)".*?'
+                    r'data-doplacilo="(?P<doplacilo>.+?)".*?'
+                    r'data-posid="(?P<id>.+?)".*?'
+                    r'data-lokal="(?P<ime>.+?)" .*?'
+                    r'data-city="(?P<mesto>.+?)".*?'
+                    r'acidjs-rating-disabled">(?P<ocena>.*?)<br />.*?',
+                             re.DOTALL)
+vzorec_ocene = re.compile(r'checked="checked".*?value="(?P<ocena>.+?)".*?',
+                          re.DOTALL)
+slovar_lastnosti_ponudbe = {'1': 'Vegetarijansko',
+                            '3': 'Dostop za invalide',
+                            '5': 'Dostava', '7': 'Solata',
+                            '8': 'Dostop za invalide (WC)',
+                            '9': 'Študentske ugodnosti',
+                            '10': 'Celiakiji prijazni obroki',
+                            '20': 'Odprt ob vikendih',
+                            '21': 'Kosilo',
+                            '22': 'Pizza',
+                            '23': 'Hitra hrana',
+                            '69': 'Nov lokal'}
+
 def vsebina_datoteke(directory, filename):
     '''Return the contents of the file "directory"/"filename" as a string.'''
     path = os.path.join(directory, filename)
-    with open(path, 'r') as file_in:
+    with open(path, 'r', encoding='utf-8') as file_in:
         return file_in.read()
 
 def page_to_blocks(page):
     '''Split "page" to a list of blocks.'''
-    rx = re.compile(r'<div class="row restaurant(.*?)<div class="pull-right margin-right-10">', re.DOTALL)
-    lokali = re.findall(rx, page)
+    lokali = re.findall(vzorec_bloka, page)
     return lokali
-
 
 def get_information_from_block(block):
     '''Build a dictionary containing information.'''
-    rx = re.compile(r'row(?P<lastnosti_ponudbe>.+?)".*?data-lat=.*?'
-                    r'data-naslov="(?P<naslov>.+?)".*?'
-                    r'data-cena="(?P<cena>.+?)".*?'
-                    r'data-doplacilo="(?P<doplacilo>.+?)".*?'
-                    r'data-lokal="(?P<ime>.+?)" .*?'
-                    r'data-city="(?P<mesto>.+?)".*?'
-                    r'checked="checked".*?value="(?P<ocena>.+?)".*?', re.DOTALL)
-    data = re.search(rx, block)
+    data = re.search(vzorec_podatkov, block)
     slovar_informacij = data.groupdict()
     return slovar_informacij
 
-#do tukaj je po mojem OK
-
-
-
-
-
-
 def lokali_iz_datoteke(directory, filename):
     '''Parse the ads in filename/directory into a dictionary list.'''
-    page = vsebina_datoteke(filename, directory)
-    blocks = page_to_blocks(page)
-    lokali = [get_information_from_block(block) for block in blocks]
+    page = vsebina_datoteke(directory, filename)
+    lokali = []
+    for block in page_to_blocks(page):
+        lokali.append(get_information_from_block(block))
     return lokali
 
+def izlusci_oceno(lokali):
+    for lokal in lokali:
+        if 'checked="checked"' in lokal['ocena']:
+            for ujemanje in re.finditer(vzorec_ocene, lokal['ocena']):
+                nova_ocena = ujemanje.group('ocena')
+            lokal['ocena'] = int(nova_ocena)
+        else:
+            lokal['ocena'] = 0
+    return lokali
 
+def izlusci_lastnosti_ponudbe(lokali):
+    for lokal in lokali:
+        vzorec_lastnosti = re.compile(r'(\d+)', re.DOTALL)
+        lastnosti_lokala = set()
+        for ujemanje in re.finditer(vzorec_lastnosti,
+                                    lokal['lastnosti_ponudbe']):
+            lastnosti_lokala.add(slovar_lastnosti_ponudbe[ujemanje.group(0)])
+        lokal['lastnosti_ponudbe'] = lastnosti_lokala
+    return lokali
 
-#def ads_frontpage():
-#return lokali_iz_datoteke(cat_directory, frontpage_filename)
+def pripravi_lastnosti_ponudbe_za_zapis(lokali):
+    ponudba = []
+    for lokal in lokali:
+        for lastnost in lokal['lastnosti_ponudbe']:
+            ponudba.append({'id': int(lokal['id']),
+                            'lastnost': lastnost})
+    return ponudba
 
+def pripravi_podatke_za_zapis(lokali):
+    podatki = []
+    for lokal in lokali:
+        slovar = {}
+        slovar['id'] = int(lokal['id'])
+        slovar['cena'] = round(float(lokal['cena'][:-3])
+                               + float(lokal['cena'][-2:]) * 0.01, 2)
+        slovar['doplacilo'] = round(float(lokal['doplacilo'][:-3])
+                                    + float(lokal['doplacilo'][-2:]) * 0.01, 2)
+        slovar['naslov'] = lokal['naslov']
+        slovar['ocena'] = lokal['ocena']
+        slovar['mesto'] = lokal['mesto']
+        slovar['ime'] = lokal['ime']
+        podatki.append(slovar)
+    return podatki
+
+def pripravi_imenik(ime_datoteke):
+    '''Če še ne obstaja, pripravi prazen imenik za dano datoteko.'''
+    imenik = os.path.dirname(ime_datoteke)
+    if imenik:
+        os.makedirs(imenik, exist_ok=True)
 
 def zapisi_csv(slovarji, imena_polj, ime_datoteke):
     '''Iz seznama slovarjev ustvari CSV datoteko z glavo.'''
@@ -57,118 +114,10 @@ def zapisi_csv(slovarji, imena_polj, ime_datoteke):
         for slovar in slovarji:
             writer.writerow(slovar)
 
-def write_csv(fieldnames, rows, directory, filename):
-    '''Write a CSV file to directory/filename. The fieldnames must be a list of
-    strings, the rows a list of dictionaries each mapping a fieldname to a
-    cell-value.'''
-    os.makedirs(directory, exist_ok=True)
-    path = os.path.join(directory, filename)
-    with open(path, 'w') as csv_file:
-        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(row)
-    return None
-
-# Definirajte funkcijo, ki sprejme neprazen seznam slovarjev, ki predstavljajo
-# podatke iz oglasa mačke, in zapiše vse podatke v csv datoteko. Imena za
-# stolpce [fieldnames] pridobite iz slovarjev.
-
-
-def write_cat_ads_to_csv(ads, directory, filename):
-    '''Write a CSV file containing one ad from "ads" on each row.'''
-    write_csv(ads[0].keys(), ads, directory, filename)
-
-
-def write_cat_csv(ads):
-    '''Save "ads" to "cat_directory"/"csv_filename"'''
-    write_cat_ads_to_csv(ads, cat_directory, csv_filename)
-
-
-#lokali_iz_datoteke(r'U:\Programiranje 1\Analiza-podatkov-Programiranje-1', 'Imenik_lokalov_Studentska_prehrana.htm')
-
-blok =  '''row service-1 service-3 service-20 service-21"
-         data-lat="46.05249470" data-lon="14.51100380" 
-         data-naslov="Trubarjeva cesta 40"
-         data-cena="6,53" data-doplacilo="3,90"
-         data-posid="1478" 
-         data-detailslink="/sl/restaurant/Details/1478"
-         data-lokal="ABI FALAFEL" 
-         data-city="LJUBLJANA" 
-         data-sort-group="65">
-        <div class="col-md-12"  data-distance="" >
-            <div class="shadow-wrapper">
-                <div class="bg-light rounded box-shadow shadow-effect-2">
-                    
-
-                    <h2 class="no-margin color-blue">
-                        <a href="/sl/restaurant/Details/1478">
-                            ABI FALAFEL
-                        </a>
-
-                       
-
-                        
-
-                        
-
-
-                    </h2>
-
-
-                        
-                   
-
-                    <div class="acidjs-rating-stars acidjs-rating-disabled">
-                        <form>
-                                <input type="radio" name="group-1478" id="1478-0" value="5" /><label for="1478-0"></label>
-                                                            <input checked="checked" type="radio" name="group-1478" id="1478-1" value="4" /><label for="1478-1"></label>
-                                                            <input type="radio" name="group-1478" id="1478-2" value="3" /><label for="1478-2"></label>
-                                                            <input type="radio" name="group-1478" id="1478-3" value="2" /><label for="1478-3"></label>
-                                                            <input type="radio" name="group-1478" id="1478-4" value="1" /><label for="1478-4"></label>
-
-
-
-
-                        </form>
-                    </div>
-                    
-                    <br />
-
-
-                    <small><i>Trubarjeva cesta 40, 1000 Ljubljana</i>
-                    <span id="dist_1478" class="pull-right"></span>
-                    
-                    </small>
-       
-                    
-                    <br />
-
-                    <br />
-
-
-                    <br />
-                    
-                    <br />
-                    <div class="row">
-                        <div class="col col-md-3">
-                            <small>
-                                <span class="text-bold">Doplačilo : &nbsp;</span>
-                                <span class=" color-light-grey">3,90 EUR</span>
-                                 
-                                <br />
-                                <span class="text-bold">Cena obroka : &nbsp;</span>
-                                <span class=" color-light-grey">6,53 EUR</span>
-                            </small>
-                        </div>
-
-'''
-
-page = vsebina_datoteke(r'U:\Programiranje 1\Analiza-podatkov-Programiranje-1', 'Imenik_lokalov_Studentska_prehrana.htm')[:100000]
-lokali = []
-for block in page_to_blocks(page):
-    lokali.append(get_information_from_block(block))
-    print(lokali[-1])
-    
-#print(get_information_from_block(blok))
-
+lokali = lokali_iz_datoteke(nahajalisce_strani, shranjena_stran)
+precisceni_lokali = izlusci_oceno(izlusci_lastnosti_ponudbe(lokali))
+ponudba = pripravi_lastnosti_ponudbe_za_zapis(precisceni_lokali)
+podatki = pripravi_podatke_za_zapis(precisceni_lokali)
+zapisi_csv(podatki, ['id', 'cena', 'doplacilo', 'mesto', 'ocena','ime',
+                     'naslov'], 'studentska_prehrana.csv')
+zapisi_csv(ponudba, ['id', 'lastnost'], 'lastnosti_ponudbe.csv')
